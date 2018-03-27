@@ -72,7 +72,7 @@ class Row():
         
     def _validate(self, card):
         if not (isinstance(card, Card006)):
-            raise ValueError('Invalid type')
+            raise ValueError('Invalid row: must be initalised with Card006')
             
     def __str__(self):
         return 'Row №{}: {}'.format(self.row_id, ' '.join(str(card) for card in self.list_card))
@@ -89,11 +89,11 @@ class Table():
     def __init__(self, cards):
         if not all(isinstance(card, Card006) for card in cards):
             raise ValueError(
-                'Invalid player: cards must all be Card006 objects'
+                'Invalid table: all cards must be Card006 objects'
             )
         if len(cards) != 4:
             raise ValueError(
-                'Invalid player: must be initalised with 4 Cards006'
+                'Invalid table: must be initalised with 4 Cards006'
             )
         self.rows = [Row(cards[i], i+1) for i in range(4)]
         
