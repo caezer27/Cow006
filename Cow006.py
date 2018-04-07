@@ -1,4 +1,3 @@
-
 # coding: utf-8
 
 # In[1]:
@@ -58,6 +57,9 @@ class Card006():
     
     def __repr__(self):
         return "Card006 with number {}".format(self.card_number)
+
+    def __sub__(self, other):
+        return self.card_number - other.card_number
     
     def score(self):
         return self.card_score
@@ -69,13 +71,13 @@ class Row():
         self._validate(card)
         self.list_card = [card]
         self.row_id = row_id
-        
+
     def _validate(self, card):
         if not (isinstance(card, Card006)):
             raise ValueError('Invalid row: must be initalised with Card006')
             
     def __str__(self):
-        return 'Row №{}: {}'.format(self.row_id, ' '.join(str(card) for card in self.list_card))
+        return 'Row №{}: {}'.format(self.row_id+1, ' '.join(str(card) for card in self.list_card))
     
     def __repr__(self):
         return '<Row object. Row id:{}. Row\'s cards: {}>'.format(self.row_id, self.list_card)
@@ -83,7 +85,20 @@ class Row():
     def add(self, card):
         self.list_card.append(card)
 
-        
+    def accept_card(self, card):
+        self._validate(card)
+        if self.list_card[-1] < card:
+            return True
+        else:
+            return False
+
+    def check6(self):
+        if len(self.list_card) == 5:
+            return True
+        else:
+            return False
+
+
 class Table():
     
     def __init__(self, cards):
@@ -95,7 +110,7 @@ class Table():
             raise ValueError(
                 'Invalid table: must be initalised with 4 Cards006'
             )
-        self.rows = [Row(cards[i], i+1) for i in range(4)]
+        self.rows = [Row(cards[i], i) for i in range(4)]
         
     def __repr__(self):
         cards_of_rows = list(map(str, self.rows))
@@ -104,44 +119,11 @@ class Table():
     def __str__(self):
         cards_of_rows = list(map(str, self.rows))
         return 'Current table:\n{c[0]}\n{c[1]}\n{c[2]}\n{c[3]}'.format(c = cards_of_rows)
-    
-    def put_card(self, card, person = False):
-        list_comparing = []
-        i = 0
-        for row in self.rows:
-            if card.card_number > row.list_card[-1].card_number:
-                list_comparing.append([card.card_number - row.list_card[-1].card_number, i])
-            i += 1
-        list_comparing.sort()
-        if len(list_comparing) > 0:
-            if len(self.rows[list_comparing[0][1]].list_card) == 5:
-                out_cards = copy.copy(self.rows[list_comparing[0][1]].list_card)
-                self.rows[list_comparing[0][1]].list_card.clear()
-                self.rows[list_comparing[0][1]].add(card)
-                return out_cards
-            else:
-                self.rows[list_comparing[0][1]].add(card)
-        else:
-            if person:
-                print(self)
-                row_index = int(input('Please select row. '))
-                if row_index > 4 or row_index < 1:
-                    print('Please select an existing row! ')
-                out_cards = copy.copy(self.rows[row_index-1].list_card)
-                self.rows[row_index-1].list_card.clear()
-                self.rows[row_index-1].add(card)
-                return out_cards
-            else:
-                row_index = choice(list(range(1, 5)))
-                out_cards = copy.copy(self.rows[row_index-1].list_card)
-                self.rows[row_index-1].list_card.clear()
-                self.rows[row_index-1].add(card)
-                return out_cards
-    
-        
+
+
 class CowPlayer():
     
-    def __init__(self, cards, player_id=None):
+    def __init__(self, cards, player_id=None, human=False):
         if len(cards) != 10:
             raise ValueError(
                 'Invalid player: must be initalised with 10 Cards006'
@@ -153,6 +135,7 @@ class CowPlayer():
         self.hand = cards
         self.player_id = player_id
         self.penalty_score = 0
+        self.human = human
     
     def __repr__(self):
         if self.player_id is not None:
@@ -169,45 +152,89 @@ class CowPlayer():
     def add_cards_to_base(self, penalty_cards):
         if penalty_cards == None:
             return None
-        sum = 0
         for card in penalty_cards:
-            sum += card.card_score
-        self.penalty_score += sum
+            self.penalty_score += card.card_score
         
     def print_hand(self):
-            print('Your hand: {}'.format(
+            print('Player №{}, your hand: {}'.format(
+                self.player_id+1,
                 ' '.join(str(card) for card in self.hand)
             ))
             
     
 class CowGame():
-    
-    def __init__(self, players):
-        if not isinstance(players, int):
-            raise ValueError('Invalid game: players must be integer')
-        if not 2 <= players <= 10:
-            raise ValueError('Invalid game: must be between 2 and 10 players')
-        self.deck = Card006.all_cards(True)
-        self.players = [
-            CowPlayer(self._deal_hand(), n) for n in range(players)
-        ]
-        self.table = Table([self.deck.pop() for i in range(4)])
+
+    CRITICIAL_PENALTY_SCORE = 66
+
+    def __init__(self, human_players, ii_players):
+        if not (isinstance(human_players, int) and isinstance(ii_players, int)):
+            raise ValueError('Invalid game: number of players must be integer')
+        if not 2 <= human_players + ii_players <= 10:
+            raise ValueError('Invalid game: total number of players must be between 2 and 10 players')
+        self.clear(True, human_players, ii_players)
         self.playable_cards = []
+
+    def clear(self, initial = False, human_players = None, ii_players = None):
+        self.deck = Card006.all_cards(random=True)
+        if initial:
+            self.players = [CowPlayer(self.deal_hand(), n, True) for n in range(human_players)]
+            self.players.extend([CowPlayer(self.deal_hand(), n+human_players) for n in range(ii_players)])
+        else:
+            for player in self.players:
+                player.hand = self.deal_hand()
+        self.table = Table([self.deck.pop() for i in range(4)])
     
-    def _deal_hand(self):
+    def deal_hand(self):
         return [self.deck.pop() for i in range(10)]
     
     @property
     def is_active(self):
-        return all((player.penalty_score) < 66 for player in self.players)
+        return all((player.penalty_score) < CowGame.CRITICIAL_PENALTY_SCORE for player in self.players)
     
     def pop_card_player(self, player_id, card_index):
         self.playable_cards.append([self.players[player_id].hand.pop(card_index), player_id])
-    
+
+    def human_put_card(self, player_id, card):
+        list_comparing = [rows.row_id for rows in self.table.rows if rows.accept_card(card)]
+        if len(list_comparing) == 0:
+            print(self.table)
+            choosed = False
+            while not choosed:
+                row_index = int(input('Please select row. ')) - 1
+                if row_index > 3 or row_index < 0:
+                    print('Please select an existing row! ')
+                else:
+                    self.players[player_id].add_cards_to_base(self.table.rows[row_index].list_card)
+                    self.table.rows[row_index].list_card.clear()
+                    self.table.rows[row_index].add(card)
+                    choosed = True
+        else:
+            row_id = min([(card - self.table.rows[row].list_card[-1],row) for row in list_comparing])[1]
+            if self.table.rows[row_id].check6():
+                self.players[player_id].add_cards_to_base(self.table.rows[row_id].list_card)
+                self.table.rows[row_id].list_card.clear()
+                self.table.rows[row_id].add(card)
+            else:
+                self.table.rows[row_id].add(card)
+
+    def put_card(self, player_id, card):
+        list_comparing = [rows.row_id for rows in self.table.rows if rows.accept_card(card)]
+        if len(list_comparing) == 0:
+            row_index = choice(list(range(4)))
+            self.players[player_id].add_cards_to_base(self.table.rows[row_index].list_card)
+            self.table.rows[row_index].list_card.clear()
+            self.table.rows[row_index].add(card)
+        else:
+            row_id = min([(card - self.table.rows[row].list_card[-1],row) for row in list_comparing])[1]
+            if self.table.rows[row_id].check6():
+                self.players[player_id].add_cards_to_base(self.table.rows[row_id].list_card)
+                self.table.rows[row_id].list_card.clear()
+                self.table.rows[row_id].add(card)
+            else:
+                self.table.rows[row_id].add(card)
+
     def play(self):
-        My_player = self.players[0]
-        print('The game begins. You are Player №0.')  
-#         My_player.print_hand()
+        print('The game begins.')
         while self.is_active:
             counter = 1
             while self.is_active and counter <= 10:
@@ -219,60 +246,48 @@ class CowGame():
         print('Game has finished!\n')
         print('Player\'s penalty scores:')
         for player in self.players:
-            print(player.penalty_score)
-            
-    def clear(self):
-        self.deck = Card006.all_cards(True)
-        for player in self.players:
-            player.hand = self._deal_hand()
-        self.table = Table([self.deck.pop() for i in range(4)])
+            print('Player №{} - {}'.format(player.player_id+1, player.penalty_score))
 
     def __next__(self):
-        if not self.is_active:
-            return 0
         print(self.table)
         print()
         print('Current penalty scores:')
         for player in self.players:
-            print('Player №{} has {} penalty scores'.format(player.player_id, player.penalty_score))
+            print('Player №{} has {} penalty scores'.format(player.player_id+1, player.penalty_score))
         print()
-        My_player = self.players[0]
-        My_player.print_hand()
-        played = False
-        while not played:
-            card_index = int(input('Which card do you want to play? '))
-            if card_index > len(My_player.hand) or card_index < 1:
-                print('Please select an existing card! ')
-            else:
-                self.pop_card_player(self.players.index(My_player), card_index-1)
-                played = True
 
-        for i in range(1, len(self.players)):
-            card = choice(self.players[i].hand)
-            self.pop_card_player(i, choice(list(range(len(self.players[i].hand)))))
-
-        self.playable_cards.sort(reverse = True)
-#         print(self.playable_cards)
-        for card in self.playable_cards:
-            if card[1] == 0:
-                self.players[card[1]].add_cards_to_base(self.table.put_card(card[0], True))
+        for player in self.players:
+            if player.human:
+                player.print_hand()
+                played = False
+                while not played:
+                    card_index = int(input('Which card do you want to play? '))
+                    for card in player.hand:
+                        if card.card_number == card_index:
+                            self.pop_card_player(player.player_id, player.hand.index(card))
+                            played = True
+                            break
+                    if not played:
+                        print('Please select an existing card! ')
             else:
-                self.players[card[1]].add_cards_to_base(self.table.put_card(card[0]))
+                card = choice(player.hand)
+                self.pop_card_player(player.player_id, player.hand.index(card))
+
+        self.playable_cards.sort()
+        print(self.playable_cards)
+
+        for card_and_player_id in self.playable_cards:
+            player_ids = card_and_player_id[1]
+            card = card_and_player_id[0]
+            if self.players[player_ids].human:
+                self.human_put_card(player_ids, card)
+            else:
+                self.put_card(player_ids, card)
             if not self.is_active:
                 break
         self.playable_cards.clear()
 
+
 if __name__ == '__main__':
-    egame = CowGame(4)
+    egame = CowGame(1,3)
     egame.play()
-
-
-# In[ ]:
-
-
-
-
-# In[ ]:
-
-
-
