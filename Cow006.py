@@ -1,6 +1,7 @@
 # coding: utf-8
 
 from random import shuffle, choice
+import pickle
 import copy
 
 
@@ -218,12 +219,40 @@ class CowGame():
             print(self.table)
             choosed = False
             while not choosed:
-                row_id = int(input('Please select row. ')) - 1
-                if row_id > Table.NUMBER_OF_ROWS - 1 or row_id < 0:
-                    print('Please select an existing row! ')
+                input_from_player = input('Please select row. ')
+                if input_from_player == 'save':
+                    if self.save():
+                        print('Game saved successfully!')
                 else:
-                    self.take_row(player_id, row_id, card)
-                    choosed = True
+                    row_id = int(input_from_player) - 1
+                    if row_id > Table.NUMBER_OF_ROWS - 1 or row_id < 0:
+                        print('Please select an existing row! ')
+                    else:
+                        self.take_row(player_id, row_id, card)
+                        choosed = True
+
+    def save(self):
+        data = self.creat_data_to_save()
+        with open('save.cow.pickle', 'wb') as f:
+            pickle.dump(data, f)
+        return True
+
+    def creat_data_to_save(self):
+        data = {}
+        data['deck'] = self.deck
+        data['players'] = self.players
+        data['table'] = self.table
+        data['playable_cards'] = self.playable_cards
+        return data
+
+    def load(self):
+        with open('save.cow.pickle', 'rb') as f:
+            data_new = pickle.load(f)
+            self.deck = data_new['deck']
+            self.players = data_new['players']
+            self.table = data_new['table']
+            self.playable_cards = data_new['playable_cards']
+            self.next_step(load=True)
 
     def put_card(self, player_id, card):
         list_comparing = [rows.row_id for rows in self.table.rows if rows.accept_card(card)]
@@ -237,7 +266,6 @@ class CowGame():
         row_id = min([(card - self.table.rows[row].list_card[-1], row) for row in list_comparing])[1]
         if self.table.rows[row_id].check6():
             self.take_row(player_id, row_id, card)
-            self.print_take_row(player_id, row_id, card)
         else:
             self.table.rows[row_id].add(card)
             self.print_put_card(player_id, card, row_id)
@@ -250,12 +278,25 @@ class CowGame():
 
     def play(self):
         print('The game begins.')
+        choosed = False
+        while not choosed:
+            input_from_player = input('Would you like load previous game? ')
+            if input_from_player == 'yes':
+                print('Game loaded.')
+                self.load()
+                choosed = True
+            elif input_from_player == 'no':
+                print('Game continues.')
+                choosed = True
+            else:
+                print('I cannot understand you! Please, repeat!')
+
         while self.is_active:
-            counter = 1
-            while self.is_active and counter <= CowPlayer.INITIAL_NUMBER_OF_CARDS:
+            counter = len(self.players[0].hand)
+            while self.is_active and counter > 0:
                 print()
-                next(self)
-                counter += 1
+                self.next_step()
+                counter = len(self.players[0].hand)
             self.clear()
         print()
         print('Game has finished!\n')
@@ -263,45 +304,47 @@ class CowGame():
         for player in self.players:
             print('Player №{} - {}'.format(player.player_id+1, player.penalty_score))
 
-    def __next__(self):
-        print(self.table)
-        print()
-        print('Current penalty scores:')
-        for player in self.players:
-            print('Player №{} has {} penalty scores'.format(player.player_id+1, player.penalty_score))
-        print()
+    def next_step(self, load = False):
+        if (load == False):
+            print(self.table)
+            print()
+            print('Current penalty scores:')
+            for player in self.players:
+                print('Player №{} has {} penalty scores'.format(player.player_id+1, player.penalty_score))
+            print()
 
-        #Выбор карт для игры
-        for player in self.players:
-            if player.human:
-                player.print_hand()
-                played = False
-                while not played:
-                    card_index = int(input('Which card do you want to play? '))
-                    for card in player.hand:
-                        if card.card_number == card_index:
-                            self.pop_card_player(player.player_id, player.hand.index(card))
-                            played = True
-                            break
-                    if not played:
-                        print('Please select an existing card! ')
-            else:
-                card = choice(player.hand)
-                self.pop_card_player(player.player_id, player.hand.index(card))
+            #Выбор карт для игры
+            for player in self.players:
+                if player.human:
+                    player.print_hand()
+                    played = False
+                    while not played:
+                        card_index = int(input('Which card do you want to play? '))
+                        for card in player.hand:
+                            if card.card_number == card_index:
+                                self.pop_card_player(player.player_id, player.hand.index(card))
+                                played = True
+                                break
+                        if not played:
+                            print('Please select an existing card! ')
+                else:
+                    card = choice(player.hand)
+                    self.pop_card_player(player.player_id, player.hand.index(card))
 
-        #Разложение карт по строкам
-        self.playable_cards.sort()
-        #print(self.playable_cards)
-        for card_and_player_id in self.playable_cards:
-            player_ids = card_and_player_id[1]
-            card = card_and_player_id[0]
-            if self.players[player_ids].human:
-                self.human_put_card(player_ids, card)
-            else:
-                self.put_card(player_ids, card)
-            if not self.is_active:
-                break
-        self.playable_cards.clear()
+            #Разложение карт по строкам
+            self.playable_cards.sort()
+            #print(self.playable_cards)
+        if (load == True) or (load == False):
+            for card_and_player_id in self.playable_cards:
+                player_ids = card_and_player_id[1]
+                card = card_and_player_id[0]
+                if self.players[player_ids].human:
+                    self.human_put_card(player_ids, card)
+                else:
+                    self.put_card(player_ids, card)
+                if not self.is_active:
+                    break
+            self.playable_cards.clear()
 
 
 if __name__ == '__main__':
