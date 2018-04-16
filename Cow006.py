@@ -38,7 +38,7 @@ class Card006():
         if not (number > 0 and number < Card006.MAX_CARD_NUMBER+1):
             raise ValueError('Invalid card\'s number')
     
-    def __eq__(self, other):                                      #Проверять ли что other - card006???
+    def __eq__(self, other):
         if self.card_number == other.card_number:
             return True
         else:
@@ -75,7 +75,7 @@ class Row():
         self.list_card = [card]
         self.row_id = row_id
 
-    def _validate(self, card, row_id):                        #Что значит _функция???
+    def _validate(self, card, row_id):
         if not (isinstance(card, Card006)):
             raise ValueError('Invalid row: must be initalised with Card006')
         if not (isinstance(row_id, int)):
@@ -212,26 +212,26 @@ class CowGame():
 
     def human_put_card(self, player_id, card):
         list_comparing = [rows.row_id for rows in self.table.rows if rows.accept_card(card)]
-        if len(list_comparing) == 0:
+        if list_comparing:
+            self.put_card_to_row(list_comparing, player_id, card)
+        else:
             print(self.table)
             choosed = False
             while not choosed:
                 row_id = int(input('Please select row. ')) - 1
-                if row_id > Table.NUMBER_OF_ROWS-1 or row_id < 0:
+                if row_id > Table.NUMBER_OF_ROWS - 1 or row_id < 0:
                     print('Please select an existing row! ')
                 else:
                     self.take_row(player_id, row_id, card)
                     choosed = True
-        else:
-            self.put_card_to_row(list_comparing, player_id, card)
 
     def put_card(self, player_id, card):
         list_comparing = [rows.row_id for rows in self.table.rows if rows.accept_card(card)]
-        if len(list_comparing) == 0:
+        if list_comparing:
+            self.put_card_to_row(list_comparing, player_id, card)
+        else:
             row_id = choice(list(range(Table.NUMBER_OF_ROWS)))
             self.take_row(player_id, row_id, card)
-        else:
-            self.put_card_to_row(list_comparing, player_id, card)
 
     def put_card_to_row(self, list_comparing, player_id, card):
         row_id = min([(card - self.table.rows[row].list_card[-1], row) for row in list_comparing])[1]
