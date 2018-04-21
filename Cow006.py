@@ -3,6 +3,7 @@
 from random import shuffle, choice
 import pickle
 import copy
+import json
 
 
 class Card006():
@@ -18,6 +19,13 @@ class Card006():
             return deck
         else:
             return list(Card006(num) for num in Card006.CARD_SCORE)
+
+    @staticmethod
+    def redict(card_dict):
+        return Card006(card_dict['Card'][0])
+
+    def dict(self):
+        return {'Card': [self.card_number,self.card_score]}
     
     def __init__(self, number):
         def _det_score(number1):
@@ -76,6 +84,17 @@ class Row():
         self.list_card = [card]
         self.row_id = row_id
 
+    @staticmethod
+    def redict(row_dict):
+        list_cards = [Card006.redict(card) for card in row_dict['cards']]
+        row = Row(list_cards.pop(0), row_dict['id'])
+        for card in list_cards:
+            row.add(card)
+        return row
+
+    def dict(self):
+        return {'id': self.row_id, 'cards': [card.dict() for card in self.list_card]}
+
     def _validate(self, card, row_id):
         if not (isinstance(card, Card006)):
             raise ValueError('Invalid row: must be initalised with Card006')
@@ -109,17 +128,28 @@ class Table():
 
     NUMBER_OF_ROWS = 4
     
-    def __init__(self, cards):
-        if not all(isinstance(card, Card006) for card in cards):
-            raise ValueError(
-                'Invalid table: all cards must be Card006 objects'
-            )
-        if len(cards) != Table.NUMBER_OF_ROWS:
-            raise ValueError(
-                'Invalid table: must be initalised with {} Cards006'.format(Table.NUMBER_OF_ROWS)
-            )
-        self.rows = [Row(cards[i], i) for i in range(Table.NUMBER_OF_ROWS)]
-        
+    def __init__(self, cards, reinit = False):
+        if reinit:
+            self.rows = [row for row in cards]
+        else:
+            if not all(isinstance(card, Card006) for card in cards):
+                raise ValueError(
+                    'Invalid table: all cards must be Card006 objects'
+                )
+            if len(cards) != Table.NUMBER_OF_ROWS:
+                raise ValueError(
+                    'Invalid table: must be initalised with {} Cards006'.format(Table.NUMBER_OF_ROWS)
+                )
+            self.rows = [Row(cards[i], i) for i in range(Table.NUMBER_OF_ROWS)]
+
+    def dict(self):
+        return {'rows': [row.dict() for row in self.rows]}
+
+    @staticmethod
+    def redict(table_dict):
+        list_of_rows = [Row.redict(row) for row in table_dict['rows']]
+        return Table(list_of_rows, reinit = True)
+
     def __repr__(self):
         cards_of_rows = list(map(str, self.rows))
         return '<CowTable object. Rows:\n{}>'.format('\n'.join(cards for cards in cards_of_rows))
@@ -133,17 +163,31 @@ class CowPlayer():
 
     INITIAL_NUMBER_OF_CARDS = 10
 
-    def __init__(self, cards, player_id=None, human=False):
-        if len(cards) != CowPlayer.INITIAL_NUMBER_OF_CARDS:
-            raise ValueError(
-                'Invalid player: must be initalised with {} Cards006'.format(CowPlayer.INITIAL_NUMBER_OF_CARDS))
-        if not all(isinstance(card, Card006) for card in cards):
-            raise ValueError('Invalid player: cards must all be Card006 objects')
+    def __init__(self, cards, player_id=None, human=False, penalty=0, reinit=False):
+        if not reinit:
+            if len(cards) != CowPlayer.INITIAL_NUMBER_OF_CARDS:
+                raise ValueError(
+                    'Invalid player: must be initalised with {} Cards006'.format(CowPlayer.INITIAL_NUMBER_OF_CARDS))
+            if not all(isinstance(card, Card006) for card in cards):
+                raise ValueError('Invalid player: cards must all be Card006 objects')
         self.hand = cards
         self.player_id = player_id
-        self.penalty_score = 0
+        self.penalty_score = penalty
         self.human = human
-    
+
+    def dict(self):
+        return {'hand': [card.dict() for card in self.hand],
+                'id': self.player_id,
+                'penalty_score': self.penalty_score,
+                'human': self.human}
+
+    @staticmethod
+    def redict(player_dict):
+        hand = [Card006.redict(card) for card in player_dict['hand']]
+        return CowPlayer(hand, player_dict['id'], player_dict['human'], player_dict['penalty_score'],
+                         reinit=True)
+
+
     def __repr__(self):
         if self.player_id is not None:
             return '<CowPlayer object: player {}>'.format(self.player_id)
@@ -194,7 +238,12 @@ class CowGame():
             for player in self.players:
                 player.hand = self.deal_hand()
         self.table = Table([self.deck.pop() for i in range(Table.NUMBER_OF_ROWS)])
-    
+
+    def dict(self):
+        return {'playable_cards': [[card[0].dict(), card[1]] for card in self.playable_cards],
+                'players': [player.dict() for player in self.players],
+                'table': self.table.dict()}
+
     def deal_hand(self):
         return [self.deck.pop() for i in range(CowPlayer.INITIAL_NUMBER_OF_CARDS)]
     
@@ -233,25 +282,20 @@ class CowGame():
 
     def save(self):
         data = self.creat_data_to_save()
-        with open('save.cow.pickle', 'wb') as f:
-            pickle.dump(data, f)
+        with open('save.cow.json', 'w') as f:
+            json.dump(data, f)
         return True
 
     def creat_data_to_save(self):
-        data = {}
-        data['deck'] = self.deck
-        data['players'] = self.players
-        data['table'] = self.table
-        data['playable_cards'] = self.playable_cards
+        data = self.dict()
         return data
 
     def load(self):
-        with open('save.cow.pickle', 'rb') as f:
-            data_new = pickle.load(f)
-            self.deck = data_new['deck']
-            self.players = data_new['players']
-            self.table = data_new['table']
-            self.playable_cards = data_new['playable_cards']
+        with open('save.cow.json', 'r') as f:
+            data_new = json.load(f)
+            self.players = [CowPlayer.redict(player) for player in data_new['players']]
+            self.table = Table.redict(data_new['table'])
+            self.playable_cards = [[Card006.redict(card[0]), card[1]] for card in data_new['playable_cards']]
             self.next_step(load=True)
 
     def put_card(self, player_id, card):
@@ -350,3 +394,29 @@ class CowGame():
 if __name__ == '__main__':
     egame = CowGame(1,3)
     egame.play()
+
+    # a = Card006(50)
+    # b = a.dict()
+    # print(b)
+    # c = Card006.redict(b)
+    # print(repr(c))
+
+    # a = Card006(50)
+    # c = Card006(51)
+    # b = Row(a, 1)
+    # b.add(c)
+    # print(b.dict())
+    # f = b.dict()
+    # e = Row.redict(f)
+    # print(repr(e))
+
+    # a = Card006(50)
+    # b = Card006(92)
+    # c = Card006(51)
+    # d = Card006(58)
+    # tab = Table([a,b,c,d])
+    # dic = tab.dict()
+    # tab1 = Table.redict(dic)
+    # print(repr(tab))
+    # print(repr(tab1))
+
